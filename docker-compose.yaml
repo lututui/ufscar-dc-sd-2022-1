@@ -1,0 +1,17 @@
+version: "3"
+services:
+  centro_distribuicao:
+    build: .
+    command: python3 -u centro_distribuicao.py
+  fabrica:
+    build: .
+    command: python3 -u fabrica.py
+    deploy:
+      mode: replicated
+      replicas: 70
+  loja:
+    build: .
+    command: python3 -u loja.py
+    deploy:
+      mode: replicated
+      replicas: 20

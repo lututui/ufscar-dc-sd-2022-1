@@ -1,0 +1,4 @@
+Flask==2.2.2
+PyYAML~=6.0
+paho-mqtt~=1.6.1
+schedule~=1.1.0
