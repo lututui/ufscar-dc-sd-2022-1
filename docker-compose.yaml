@@ -3,6 +3,8 @@ services:
   centro_distribuicao:
     build: .
     command: python3 -u centro_distribuicao.py
+    ports:
+      - "5000:5000"
   fabrica:
     build: .
     command: python3 -u fabrica.py

@@ -1,11 +1,13 @@
+import threading
+
+import bottle as bottle
 import paho.mqtt.client as mqtt
 import schedule as schedule
 
 import util
 from Estoque import Estoque
 
-topic_namespace = 'ufscar/dc/sd/arthur'
-topic = f'{topic_namespace}/centro-distribuicao'
+c = None
 
 
 class Fabrica:
@@ -43,7 +45,7 @@ class CentroDistribuicao:
         self.lojas.clear()
 
         self.mqtt_client.publish(
-            topic,
+            util.topic,
             payload=util.build_msg(util.MsgType.GET, util.MsgTargetType.LOJA, {})
         )
 
@@ -65,7 +67,7 @@ class CentroDistribuicao:
         self.fabricas.clear()
 
         self.mqtt_client.publish(
-            topic,
+            util.topic,
             payload=util.build_msg(util.MsgType.GET, util.MsgTargetType.FABRICA, {})
         )
 
@@ -73,7 +75,7 @@ class CentroDistribuicao:
         if rc != 0:
             raise Exception("Conexão com broker falhou: " + mqtt.connack_string(rc))
 
-        self.mqtt_client.subscribe(topic)
+        self.mqtt_client.subscribe(util.topic)
 
     def on_message(self, client, userdata, msg):
         payload = util.decode_msg(msg.payload)
@@ -93,7 +95,7 @@ class CentroDistribuicao:
                 f_len = len(self.fabricas)
 
                 self.mqtt_client.publish(
-                    topic,
+                    util.topic,
                     payload=util.build_msg(
                         util.MsgType.SET,
                         util.MsgTargetType.FABRICA,
@@ -123,9 +125,7 @@ class CentroDistribuicao:
         schedule.every(15).seconds.do(self.heartbeat_fabricas)
 
 
-def main():
-    centro = CentroDistribuicao()
-
+def main(centro: CentroDistribuicao):
     centro.mqtt_client.connect('broker.hivemq.com', 1883, 60)
     centro.mqtt_client.loop_start()
 
@@ -138,5 +138,96 @@ def main():
     centro.mqtt_client.loop_stop()
 
 
+def home_css():
+    return '''
+    .tabs {
+      position: relative;   
+      min-height: 200px; /* This part sucks */
+      clear: both;
+      margin: 25px 0;
+    }
+    .tab {
+      float: left;
+    }
+    .tab label {
+      background: #eee; 
+      padding: 10px; 
+      border: 1px solid #ccc; 
+      margin-left: -1px; 
+      position: relative;
+      left: 1px; 
+    }
+    .tab [type=radio] {
+      display: none;   
+    }
+    .content {
+      position: absolute;
+      top: 28px;
+      left: 0;
+      background: white;
+      right: 0;
+      bottom: 0;
+      padding: 20px;
+      border: 1px solid #ccc; 
+    }
+    [type=radio]:checked ~ label {
+      background: white;
+      border-bottom: 1px solid white;
+      z-index: 2;
+    }
+    [type=radio]:checked ~ label ~ .content {
+      z-index: 1;
+    }
+    '''
+
+
+@bottle.route('/')
+def home():
+    if c is None:
+        return 'Loading...'
+
+    return f'''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>{home_css()}</style>
+    </head>
+    <body>
+    <div class="tabs">
+        <div class="tab">
+            <input type="radio" id="tab-1" name="tab-group-1" checked>
+            <label for="tab-1">Tab One</label>
+            <div class="content">
+                stuff
+            </div>
+        </div>
+        <div class="tab">
+            <input type="radio" id="tab-2" name="tab-group-1">
+            <label for="tab-2">Tab Two</label>
+            <div class="content">
+                stuff
+            </div>
+        </div>
+        <div class="tab">
+            <input type="radio" id="tab-3" name="tab-group-1">
+            <label for="tab-3">Tab Three</label>
+            <div class="content">
+                stuff
+            </div>
+        </div>
+    </div>
+    </body>
+    </home>
+    '''
+
+
 if __name__ == '__main__':
-    main()
+    c = CentroDistribuicao()
+
+    thr = threading.Thread(target=bottle.run, kwargs={'host': '0.0.0.0', 'port': 5000, 'debug': True})
+
+    thr.start()
+
+    main(c)
+
+    thr.join()

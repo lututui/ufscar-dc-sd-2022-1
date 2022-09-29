@@ -3,6 +3,9 @@ import warnings
 from enum import Enum
 from typing import Any
 
+topic_namespace = 'ufscar/dc/sd/arthur'
+topic = f'{topic_namespace}/centro-distribuicao'
+
 
 class ProjectCustomEncoder(json.JSONEncoder):
     def default(self, o: Any) -> Any:

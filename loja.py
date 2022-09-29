@@ -5,9 +5,6 @@ import paho.mqtt.client as mqtt
 import util
 from Estoque import Estoque
 
-topic_namespace = 'ufscar/dc/sd/arthur'
-topic = f'{topic_namespace}/centro-distribuicao'
-
 
 class Loja:
     def __init__(self, lid):
@@ -22,7 +19,7 @@ class Loja:
         if rc != 0:
             raise Exception("Conexão com broker falhou: " + mqtt.connack_string(rc))
 
-        self.mqtt_client.subscribe(topic)
+        self.mqtt_client.subscribe(util.topic)
 
     def on_message(self, client, userdata, msg: mqtt.MQTTMessage):
         payload = util.decode_msg(msg.payload)
@@ -41,7 +38,7 @@ class Loja:
                 print('Enviando heartbeat para centro de distribuição')
 
                 self.mqtt_client.publish(
-                    topic,
+                    util.topic,
                     payload=util.build_msg(
                         util.MsgType.GET,
                         util.MsgTargetType.CENTRO_DISTRIBUICAO,
