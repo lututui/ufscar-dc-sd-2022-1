@@ -2,3 +2,5 @@ PyYAML~=6.0
 paho-mqtt~=1.6.1
 schedule~=1.1.0
 bottle~=0.12.23
+tabulate~=0.8.10
+gevent~=21.12.0

@@ -2,22 +2,40 @@ import warnings
 
 import yaml
 
+import util
+
 
 class Estoque:
-    def __init__(self):
+    def __init__(self, centro=False):
         self.db = {}
         self.tipos_produtos = []
 
-        print('Gerando estoque vazio...')
+        print('Gerando estoque cheio...')
 
         with open('produtos.yaml', 'r') as f:
             produtos = yaml.load(f, Loader=yaml.FullLoader)
 
             for p in produtos:
-                self.db[p['pid']] = {'classe': p['classe'], 'pid': p['pid'], 'qntd': 0}
+                qntd = util.max_estoque(p['classe'])
+
+                if centro:
+                    qntd *= 20
+
+                self.db[p['pid']] = {'classe': p['classe'], 'pid': p['pid'], 'qntd': qntd}
 
         self.tipos_produtos = list(self.db.keys())
         print('Estoque carregado')
+
+    def precisa_reestoque(self, pid) -> int:
+        classe = self.db[pid]['classe']
+        curr_estoque = self.db[pid]['qntd']
+
+        cor = util.cor_estoque(classe, curr_estoque)
+
+        if cor == 'vermelho':
+            return util.max_estoque(classe) - curr_estoque
+
+        return 0
 
     def credito(self, pid, qntd) -> int:
         if pid not in self.db:
