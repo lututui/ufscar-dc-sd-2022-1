@@ -19,7 +19,7 @@ class Estoque:
                 qntd = util.max_estoque(p['classe'])
 
                 if centro:
-                    qntd *= 20
+                    qntd *= util.qntd_lojas
 
                 self.db[p['pid']] = {'classe': p['classe'], 'pid': p['pid'], 'qntd': qntd}
 
@@ -32,7 +32,9 @@ class Estoque:
 
         cor = util.cor_estoque(classe, curr_estoque)
 
-        if cor == 'vermelho':
+        # print(f'[{pid}] {cor}: {curr_estoque}/{util.max_estoque(classe)}')
+
+        if cor == 'red':
             return util.max_estoque(classe) - curr_estoque
 
         return 0
@@ -50,13 +52,13 @@ class Estoque:
 
     def debito(self, pid, qntd) -> bool:
         if pid not in self.db:
-            raise Exception(f'Debito em PID ({pid}) desconhecido')
+            raise Exception(f'Debito em PID ({pid}: {type(pid)}) desconhecido\n{list(self.db.keys())}')
 
         if qntd <= 0:
             raise Exception(f'Debito negativo em {pid}: {qntd}')
 
         if self.db[pid]['qntd'] < qntd:
-            warnings.warn(f'Falha em debito em {pid}: disponivel {self.db[pid]["qntd"]} debito {qntd}')
+            print(f'Falha em debito em {pid}: disponivel {self.db[pid]["qntd"]} debito {qntd}')
             return False
 
         self.db[pid]['qntd'] -= qntd

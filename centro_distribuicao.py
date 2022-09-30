@@ -1,14 +1,5 @@
-import threading
-
-from gevent import monkey
-
-monkey.patch_all()
-
-import bottle as bottle
 import paho.mqtt.client as mqtt
 import schedule as schedule
-from tabulate import tabulate
-from gevent import sleep as g_sleep
 
 import util
 from Estoque import Estoque
@@ -46,9 +37,12 @@ class CentroDistribuicao:
     def heartbeat_lojas(self):
         lojas_conectadas = list(self.lojas.keys())
 
-        if len(lojas_conectadas) >= 20:
+        if len(lojas_conectadas) >= util.qntd_lojas:
             print('Recebido informação de todas as lojas')
-            self.ready = True
+
+            self.mqtt_client.on_subscribe = None
+            self.mqtt_client.subscribe(util.web_topic)
+
             return schedule.CancelJob
 
         print('Requisitando heartbeat de lojas')
@@ -56,14 +50,14 @@ class CentroDistribuicao:
         self.lojas.clear()
 
         self.mqtt_client.publish(
-            util.topic,
+            util.main_topic,
             payload=util.build_msg(util.MsgType.GET, util.MsgTargetType.LOJA, {})
         )
 
     def heartbeat_fabricas(self):
         fabricas_conectadas = list(self.fabricas.keys())
 
-        if len(fabricas_conectadas) >= 70:
+        if len(fabricas_conectadas) >= util.qntd_fabricas:
             print('Recebido informação de todas as fabricas')
             print('Pedindo lojas pela primeira vez')
             self.heartbeat_lojas()
@@ -78,37 +72,45 @@ class CentroDistribuicao:
         self.fabricas.clear()
 
         self.mqtt_client.publish(
-            util.topic,
+            util.main_topic,
             payload=util.build_msg(util.MsgType.GET, util.MsgTargetType.FABRICA, {})
         )
 
-    def on_connect(self, client: mqtt.Client, userdata, flags, rc):
+    def on_connect(self, client, userdata, flags, rc):
         if rc != 0:
             raise Exception("Conexão com broker falhou: " + mqtt.connack_string(rc))
 
-        self.mqtt_client.subscribe(util.topic)
+        self.mqtt_client.subscribe(util.main_topic)
 
     def update_lojas(self):
-        if len(self.buffer_update) == 20:
+        if len(self.buffer_update) == util.qntd_lojas:
             print('Recebeu todos os updates')
 
-            for lid in self.buffer_update.keys():
+            for lid in self.buffer_update:
+                # print(f'{lid} [{type(lid)}] = {self.buffer_update[lid]}')
+
                 pedido_loja = self.buffer_update[lid]
 
-                for produto in pedido_loja.keys():
+                impossivel_completar = []
+
+                for produto in pedido_loja:
                     qntd = pedido_loja[produto]
 
                     print(f'Loja {lid} pediu reestoque de {produto} x {qntd} no dia {self.dia}')
 
-                    self.estoque.debito(produto, qntd)
+                    if not self.estoque.debito(produto, qntd):
+                        impossivel_completar.append(produto)
 
                 print(f'Processou pedido da loja {lid}')
+
+                for imp in impossivel_completar:
+                    del pedido_loja[imp]
 
                 if len(pedido_loja) > 0:
                     print(f'Enviando reestoque para loja {lid}')
 
                     self.mqtt_client.publish(
-                        util.topic,
+                        util.main_topic,
                         payload=util.build_msg(
                             util.MsgType.RESTOCK,
                             util.MsgTargetType.LOJA,
@@ -117,14 +119,14 @@ class CentroDistribuicao:
                         )
                     )
 
-            return schedule.CancelJob
+            self.buffer_update.clear()
 
-        self.buffer_update = {}
+            return schedule.CancelJob
 
         print(f'[Dia {self.dia}] Enviando pedido de update para todas as lojas')
 
         self.mqtt_client.publish(
-            util.topic,
+            util.main_topic,
             payload=util.build_msg(
                 util.MsgType.UPDATE,
                 util.MsgTargetType.LOJA,
@@ -132,15 +134,35 @@ class CentroDistribuicao:
             )
         )
 
-    def on_message(self, client, userdata, msg):
-        payload = util.decode_msg(msg.payload)
+    def web_message(self, payload):
+        # print('recv web msg')
 
-        if payload is None:
+        if payload['type'] != util.MsgType.WEB:
             return
 
-        if payload['target'] != util.MsgTargetType.CENTRO_DISTRIBUICAO:
+        if payload['msg']['op'] == 'list':
+            # print('recv list msg')
+            self.mqtt_client.publish(
+                util.web_topic,
+                payload=util.build_msg(
+                    util.MsgType.WEB,
+                    util.MsgTargetType.WEB,
+                    msg_payload={'data': list(self.estoque.db.values()), 'dia': self.dia}
+                )
+            )
             return
 
+        if payload['msg']['op'] == 'step':
+            # print('Recv step msg')
+            self.dia += 1
+            schedule.every(5).seconds.do(self.update_lojas)
+            return
+
+        print(f'Centro de distribuição recv unparsed msg {payload}')
+
+        return
+
+    def main_message(self, payload):
         if payload['type'] == util.MsgType.GET:
             # Fábrica
             if 'fid' in payload['msg']:
@@ -150,7 +172,7 @@ class CentroDistribuicao:
                 f_len = len(self.fabricas)
 
                 self.mqtt_client.publish(
-                    util.topic,
+                    util.main_topic,
                     payload=util.build_msg(
                         util.MsgType.SET,
                         util.MsgTargetType.FABRICA,
@@ -159,14 +181,14 @@ class CentroDistribuicao:
                     )
                 )
 
-                print(f'Fábricas identificadas: {len(self.fabricas)}/70')
+                print(f'Fábricas identificadas: {len(self.fabricas)}/{util.qntd_fabricas}')
                 return
 
             if 'lid' in payload['msg']:
                 uuid = payload['msg']['lid']
                 self.lojas[uuid] = Loja(uuid)
 
-                print(f'Lojas identificadas: {len(self.lojas)}/20')
+                print(f'Lojas identificadas: {len(self.lojas)}/{util.qntd_lojas}')
                 return
 
             return
@@ -179,10 +201,29 @@ class CentroDistribuicao:
                 return
 
             self.buffer_update[payload['msg']['lid']] = payload['msg']['update']
-            print(f'Recv update [Dia {self.dia}]: {len(self.buffer_update)}/20')
+            print(f'Recv update [Dia {self.dia}]: {len(self.buffer_update)}/{util.qntd_lojas}')
             return
 
-        print(f'Centro de distribuição recv unparsed msg {msg.payload.decode()}')
+        print(f'Centro de distribuição recv unparsed msg {payload}')
+
+        return
+
+    def on_message(self, client, userdata, msg: mqtt.MQTTMessage):
+        # print(msg.topic)
+        payload = util.decode_msg(msg.payload)
+
+        if payload is None:
+            return
+
+        if payload['target'] != util.MsgTargetType.CENTRO_DISTRIBUICAO:
+            return
+
+        if msg.topic == util.web_topic:
+            self.web_message(payload)
+        elif msg.topic == util.main_topic:
+            self.main_message(payload)
+        else:
+            raise Exception(f'Unknown topic: {msg.topic}')
 
     def on_subscribe(self, client, userdata, mid, granted_qos):
         print('Pedindo fábricas pela primeira vez')
@@ -191,7 +232,9 @@ class CentroDistribuicao:
         schedule.every(15).seconds.do(self.heartbeat_fabricas)
 
 
-def main(centro: CentroDistribuicao):
+def main():
+    centro = CentroDistribuicao()
+
     centro.mqtt_client.connect('broker.hivemq.com', 1883, 60)
     centro.mqtt_client.loop_start()
 
@@ -204,69 +247,5 @@ def main(centro: CentroDistribuicao):
     centro.mqtt_client.loop_stop()
 
 
-@bottle.route('/', method='POST')
-def home_post():
-    step = bottle.request.forms.get('step') == 'step'
-
-    if step:
-        print("Recebido pedido de step")
-        c.dia += 1
-        schedule.every(5).seconds.do(c.update_lojas)
-
-        while schedule.jobs:
-            g_sleep(5)
-
-        print("Pedido de step completo")
-
-    return home()
-
-
-@bottle.route('/')
-def home():
-    if c is None or not c.ready:
-        return 'Loading...'
-
-    return f'''
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <style>
-    {util.get_css()}
-    </style>
-    </head>
-    <body>
-    {
-    tabulate(
-        [['ID do Produto', 'Classe', 'Quantidade', 'Status']] +
-        [[
-            p['pid'],
-            p['classe'],
-            p['qntd'],
-            util.cor_estoque(p['classe'], p['qntd'])
-        ] for p in list(c.estoque.db.values())],
-        tablefmt='unsafehtml'
-    )}
-    <form method='post' action='/' class='step_button'>
-        Dia: {c.dia}
-        <input type='hidden' value='step' name='step'>
-        <button type='submit'>Simular dia</button>
-    </form>
-    </body>
-    </html>
-    '''
-
-
 if __name__ == '__main__':
-    c = CentroDistribuicao()
-
-    thr = threading.Thread(
-        target=main,
-        args=(c,),
-        daemon=True
-    )
-
-    thr.start()
-
-    bottle.run(host='0.0.0.0', port=5000, debug=True, server='gevent')
-
-    thr.join(timeout=1)
+    main()

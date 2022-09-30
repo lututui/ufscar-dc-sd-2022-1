@@ -19,7 +19,7 @@ class Fabrica:
         if rc != 0:
             raise Exception("Conexão com broker falhou: " + mqtt.connack_string(rc))
 
-        self.mqtt_client.subscribe(util.topic)
+        self.mqtt_client.subscribe(util.main_topic)
 
     def on_message(self, client, userdata, msg: mqtt.MQTTMessage):
         payload = util.decode_msg(msg.payload)
@@ -40,7 +40,7 @@ class Fabrica:
                 print('Enviando heartbeat para centro de distribuição')
 
                 self.mqtt_client.publish(
-                    util.topic,
+                    util.main_topic,
                     payload=util.build_msg(
                         util.MsgType.GET,
                         util.MsgTargetType.CENTRO_DISTRIBUICAO,

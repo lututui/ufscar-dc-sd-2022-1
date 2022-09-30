@@ -1,10 +1,10 @@
 import random
 import yaml
 
+import util
+
 
 def main():
-    qntd_produtos = 210
-
     classes = [
         {"nome": "A", "peso": 100},
         {"nome": "B", "peso": 60},
@@ -14,14 +14,14 @@ def main():
     sorteio_classes = random.choices(
         [c['nome'] for c in classes],
         weights=[c['peso'] for c in classes],
-        k=qntd_produtos
+        k=util.qntd_produtos
     )
 
     produtos = []
 
     res = {"A": 0, "B": 0, "C": 0}
 
-    for i in range(0, qntd_produtos):
+    for i in range(0, util.qntd_produtos):
         p = {
             "pid": i + 1,
             "classe": sorteio_classes[i]

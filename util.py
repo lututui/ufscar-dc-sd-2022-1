@@ -4,22 +4,46 @@ from enum import Enum
 from typing import Any
 
 topic_namespace = 'ufscar/dc/sd/arthur'
-topic = f'{topic_namespace}/centro-distribuicao'
+main_topic = f'{topic_namespace}/centro-distribuicao'
+web_topic = f'{topic_namespace}/web'
+
+qntd_lojas = 2
+qntd_fabricas = 2
+qntd_produtos = 3 * qntd_fabricas
 
 
-class ProjectCustomEncoder(json.JSONEncoder):
+class __CustomEncoder(json.JSONEncoder):
     def default(self, o: Any) -> Any:
         if isinstance(o, Enum):
             return o.value
 
         return super().default(o)
 
+class __CustomDecoder(json.JSONDecoder):
+    def __init__(self):
+        super().__init__(object_hook=self.object_hook)
+
+    def object_hook(self, s):
+        if isinstance(s, str):
+            try:
+                return int(s)
+            except ValueError:
+                return s
+
+        if isinstance(s, dict):
+            return {self.object_hook(k): self.object_hook(v) for k, v in s.items()}
+
+        if isinstance(s, list):
+            return [self.object_hook(v) for v in s]
+
+        return s
 
 class MsgType(Enum):
     GET = 1
     SET = 2
     UPDATE = 3
     RESTOCK = 4
+    WEB = 5
 
     def __eq__(self, o: object) -> bool:
         if isinstance(o, int):
@@ -31,6 +55,7 @@ class MsgTargetType(Enum):
     FABRICA = 1
     CENTRO_DISTRIBUICAO = 2
     LOJA = 3
+    WEB = 4
 
     def __eq__(self, o: object) -> bool:
         if isinstance(o, int):
@@ -41,13 +66,13 @@ class MsgTargetType(Enum):
 def build_msg(msg_type: MsgType, msg_target_type: MsgTargetType, msg_payload: Any, msg_target_id: str = '*') -> str:
     return json.dumps(
         {'type': msg_type, 'target': msg_target_type, 'id': msg_target_id, 'msg': msg_payload},
-        cls=ProjectCustomEncoder
+        cls=__CustomEncoder
     )
 
 
 def decode_msg(payload: bytes):
     try:
-        decoded_payload = json.loads(payload)
+        decoded_payload = json.loads(payload, cls=__CustomDecoder)
 
         return decoded_payload
     except json.JSONDecodeError as err:
@@ -72,13 +97,12 @@ def cor_estoque(classe: str, qntd: int) -> str:
     percentual = qntd * 100 / max_estoque(classe)
 
     if percentual > 50:
-        color = 'green'
-    elif percentual > 25:
-        color = 'yellow'
-    else:
-        color = 'red'
+        return 'green'
 
-    return f'<div class="box {color}"></div>'
+    if percentual > 25:
+        return 'yellow'
+
+    return 'red'
 
 
 def get_css():
@@ -110,8 +134,8 @@ def get_css():
       background-color: green;
     }
     
-    .blue {
-      background-color: blue;
+    .yellow {
+      background-color: yellow;
     }
     
     .button {

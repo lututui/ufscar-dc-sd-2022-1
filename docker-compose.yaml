@@ -10,10 +10,10 @@ services:
     command: python3 -u fabrica.py
     deploy:
       mode: replicated
-      replicas: 70
+      replicas: 2
   loja:
     build: .
     command: python3 -u loja.py
     deploy:
       mode: replicated
-      replicas: 20
+      replicas: 2
