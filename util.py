@@ -19,6 +19,7 @@ class __CustomEncoder(json.JSONEncoder):
 
         return super().default(o)
 
+
 class __CustomDecoder(json.JSONDecoder):
     def __init__(self):
         super().__init__(object_hook=self.object_hook)
@@ -37,6 +38,7 @@ class __CustomDecoder(json.JSONDecoder):
             return [self.object_hook(v) for v in s]
 
         return s
+
 
 class MsgType(Enum):
     GET = 1
@@ -80,21 +82,26 @@ def decode_msg(payload: bytes):
         return None
 
 
-def max_estoque(classe: str) -> int:
+def max_estoque(classe: str, centro: bool = False) -> int:
+    mult = 1
+
+    if centro:
+        mult *= qntd_lojas
+
     if classe == 'A':
-        return 100
+        return mult*100
 
     if classe == 'B':
-        return 60
+        return mult*60
 
     if classe == 'C':
-        return 20
+        return mult*20
 
     raise Exception(f'Classe de produto desconhecida: {classe}')
 
 
-def cor_estoque(classe: str, qntd: int) -> str:
-    percentual = qntd * 100 / max_estoque(classe)
+def cor_estoque(classe: str, qntd: int, centro: bool = False) -> str:
+    percentual = qntd * 100 / max_estoque(classe, centro=centro)
 
     if percentual > 50:
         return 'green'

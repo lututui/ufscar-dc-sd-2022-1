@@ -76,7 +76,7 @@ class CentroDistribuicao:
             payload=util.build_msg(util.MsgType.GET, util.MsgTargetType.FABRICA, {})
         )
 
-    def on_connect(self, client, userdata, flags, rc):
+    def on_connect(self, _, __, ___, rc):
         if rc != 0:
             raise Exception("Conexão com broker falhou: " + mqtt.connack_string(rc))
 
@@ -119,6 +119,8 @@ class CentroDistribuicao:
                         )
                     )
 
+                    self.verificar_inventario()
+
             self.buffer_update.clear()
 
             return schedule.CancelJob
@@ -133,6 +135,49 @@ class CentroDistribuicao:
                 msg_payload={'dia': self.dia}
             )
         )
+
+    def verificar_inventario(self):
+        print('Verificando estoque...')
+
+        for pid, prod in self.estoque.db.items():
+            sucesso = False
+
+            classe = prod['classe']
+            qntd_atual = prod['qntd']
+
+            print(f'{pid} x {qntd_atual} : {util.cor_estoque(classe, qntd_atual, centro=True)}')
+
+            if util.cor_estoque(classe, qntd_atual, centro=True) != 'red':
+                continue
+
+            qntd_necessaria = util.max_estoque(classe) - qntd_atual
+
+            print(f'Pedindo reestoque de {pid} x {qntd_necessaria}')
+
+            for fid, fab in self.fabricas.items():
+                print(f'Fabrica {fid}: {fab.produtos}')
+
+                if pid not in fab.produtos:
+                    continue
+
+                print(f'Pedindo reestoque de {pid} x {qntd_necessaria} para fábrica {fid}')
+
+                self.mqtt_client.publish(
+                    util.main_topic,
+                    payload=util.build_msg(
+                        util.MsgType.UPDATE,
+                        util.MsgTargetType.FABRICA,
+                        msg_payload={'pid': pid, 'qntd': qntd_necessaria},
+                        msg_target_id=fid
+                    )
+                )
+
+                sucesso = True
+                break
+
+            if not sucesso:
+                raise Exception(f'Não foi encontrada fábrica que fabrique {pid}\n'
+                                f'{[f.produtos for f in self.fabricas.values()]}')
 
     def web_message(self, payload):
         # print('recv web msg')
@@ -153,7 +198,7 @@ class CentroDistribuicao:
             return
 
         if payload['msg']['op'] == 'step':
-            # print('Recv step msg')
+            print('Recebeu mensagem de step')
             self.dia += 1
             schedule.every(5).seconds.do(self.update_lojas)
             return
@@ -168,15 +213,19 @@ class CentroDistribuicao:
             if 'fid' in payload['msg']:
                 # print(payload['msg'])
                 uuid = payload['msg']['fid']
+
                 self.fabricas[uuid] = Fabrica(uuid)
-                f_len = len(self.fabricas)
+
+                f_idx = len(self.fabricas) - 1
+
+                self.fabricas[uuid].produtos = self.estoque.tipos_produtos[3 * f_idx:3 * (f_idx + 1)]
 
                 self.mqtt_client.publish(
                     util.main_topic,
                     payload=util.build_msg(
                         util.MsgType.SET,
                         util.MsgTargetType.FABRICA,
-                        {"produtos": self.estoque.tipos_produtos[f_len - 1:f_len + 2]},
+                        {"produtos": self.fabricas[uuid].produtos},
                         msg_target_id=uuid
                     )
                 )
@@ -201,14 +250,20 @@ class CentroDistribuicao:
                 return
 
             self.buffer_update[payload['msg']['lid']] = payload['msg']['update']
-            print(f'Recv update [Dia {self.dia}]: {len(self.buffer_update)}/{util.qntd_lojas}')
+            print(f'[Dia {self.dia}] Recebeu update de loja: {len(self.buffer_update)}/{util.qntd_lojas}')
+            return
+
+        if payload['type'] == util.MsgType.RESTOCK:
+            pid = payload['msg']['pid']
+            qntd = payload['msg']['qntd']
+
+            print(f'Recebeu reestoque de fábrica {payload["msg"]["fid"]}: {pid} x {qntd}')
+            self.estoque.credito(pid, qntd)
             return
 
         print(f'Centro de distribuição recv unparsed msg {payload}')
 
-        return
-
-    def on_message(self, client, userdata, msg: mqtt.MQTTMessage):
+    def on_message(self, _, __, msg: mqtt.MQTTMessage):
         # print(msg.topic)
         payload = util.decode_msg(msg.payload)
 
@@ -225,7 +280,7 @@ class CentroDistribuicao:
         else:
             raise Exception(f'Unknown topic: {msg.topic}')
 
-    def on_subscribe(self, client, userdata, mid, granted_qos):
+    def on_subscribe(self, _, __, ___, ____):
         print('Pedindo fábricas pela primeira vez')
         self.heartbeat_fabricas()
 

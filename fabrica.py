@@ -1,5 +1,4 @@
 import socket
-import warnings
 
 import paho.mqtt.client as mqtt
 
@@ -15,13 +14,13 @@ class Fabrica:
         self.mqtt_client.on_connect = self.on_connect
         self.mqtt_client.on_message = self.on_message
 
-    def on_connect(self, client, userdata, flags, rc):
+    def on_connect(self, _, __, ___, rc):
         if rc != 0:
             raise Exception("Conexão com broker falhou: " + mqtt.connack_string(rc))
 
         self.mqtt_client.subscribe(util.main_topic)
 
-    def on_message(self, client, userdata, msg: mqtt.MQTTMessage):
+    def on_message(self, _, __, msg: mqtt.MQTTMessage):
         payload = util.decode_msg(msg.payload)
 
         if payload is None:
@@ -54,11 +53,27 @@ class Fabrica:
             self.produtos = payload['msg']['produtos']
 
             if len(self.produtos) != 3:
-                warnings.warn(f'[{self.id}] recebeu lista de produtos de tamanho inesperado: {len(self.produtos)}')
+                print(f'[{self.id}] recebeu lista de produtos de tamanho inesperado: {len(self.produtos)}')
 
             return
 
-        warnings.warn(f'[{self.id}] msg não reconhecida: {msg.payload.decode()}')
+        if payload['type'] == util.MsgType.UPDATE:
+            if payload["msg"]["pid"] not in self.produtos:
+                raise Exception(f'Centro de distribuição pediu {payload["msg"]["pid"]} '
+                                f'mas não é fabricado aqui: {self.produtos}')
+
+            print(f'Centro de distribuição pediu {payload["msg"]["pid"]} x {payload["msg"]["qntd"]}')
+            self.mqtt_client.publish(
+                util.main_topic,
+                payload=util.build_msg(
+                    util.MsgType.RESTOCK,
+                    util.MsgTargetType.CENTRO_DISTRIBUICAO,
+                    msg_payload={'fid': self.id, 'pid': payload['msg']['pid'], 'qntd': payload['msg']['qntd']}
+                )
+            )
+            return
+
+        print(f'[{self.id}] msg não reconhecida: {msg.payload.decode()}')
 
 
 def main():

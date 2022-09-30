@@ -88,8 +88,9 @@ def home():
         [[
             p['pid'],
             p['classe'],
-            p['qntd'],
-            f'<div class="box {util.cor_estoque(p["classe"], p["qntd"])}"></div>'
+            f'{p["qntd"]}/{util.max_estoque(p["classe"], centro=True)} '
+            f'(~{p["qntd"]/util.max_estoque(p["classe"], centro=True)*100:.2f}%)',
+            f'<div class="box {util.cor_estoque(p["classe"], p["qntd"], centro=True)}"></div>'
         ] for p in info['data']],
         tablefmt='unsafehtml'
     )}

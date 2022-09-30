@@ -16,10 +16,7 @@ class Estoque:
             produtos = yaml.load(f, Loader=yaml.FullLoader)
 
             for p in produtos:
-                qntd = util.max_estoque(p['classe'])
-
-                if centro:
-                    qntd *= util.qntd_lojas
+                qntd = util.max_estoque(p['classe'], centro=centro)
 
                 self.db[p['pid']] = {'classe': p['classe'], 'pid': p['pid'], 'qntd': qntd}
 
