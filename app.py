@@ -11,7 +11,7 @@ from gevent.event import AsyncResult
 import util
 
 
-def wrap_html(head_elements: list[str], body_elements: list[str]):
+def wrap_html(head_elements: list, body_elements: list):
     return f'''
     <!DOCTYPE html>
     <html>
@@ -162,7 +162,10 @@ def log():
     info = log_data.get(block=True)
     info = info['msg']
 
-    yield wrap_html([get_reload_tag(), get_log_css()], [info['log']])
+    yield wrap_html(
+        [get_reload_tag(), get_log_css()],
+        [info['log']]
+    )
 
     log_data = AsyncResult()
 
@@ -206,7 +209,10 @@ def home():
     </form>
     '''
 
-    yield wrap_html([get_reload_tag(), get_home_css()], [table, step_button])
+    yield wrap_html(
+        [get_reload_tag(), get_home_css()],
+        [table, step_button]
+    )
 
     web_data = AsyncResult()
 
