@@ -1,7 +1,7 @@
 import json
+import math
 import warnings
 from enum import Enum
-from typing import Any
 
 topic_namespace = 'ufscar/dc/sd/arthur'
 main_topic = f'{topic_namespace}/centro-distribuicao'
@@ -11,9 +11,12 @@ qntd_lojas = 2
 qntd_fabricas = 2
 qntd_produtos = 3 * qntd_fabricas
 
+timeout_fabricas = math.ceil(0.15 * qntd_fabricas)
+timeout_lojas = math.ceil(0.15 * qntd_lojas)
+
 
 class __CustomEncoder(json.JSONEncoder):
-    def default(self, o: Any) -> Any:
+    def default(self, o):
         if isinstance(o, Enum):
             return o.value
 
@@ -65,7 +68,7 @@ class MsgTargetType(Enum):
         return super().__eq__(o)
 
 
-def build_msg(msg_type: MsgType, msg_target_type: MsgTargetType, msg_payload: Any, msg_target_id: str = '*') -> str:
+def build_msg(msg_type: MsgType, msg_target_type: MsgTargetType, msg_payload, msg_target_id: str = '*') -> str:
     return json.dumps(
         {'type': msg_type, 'target': msg_target_type, 'id': msg_target_id, 'msg': msg_payload},
         cls=__CustomEncoder
@@ -89,13 +92,13 @@ def max_estoque(classe: str, centro: bool = False) -> int:
         mult *= qntd_lojas
 
     if classe == 'A':
-        return mult*100
+        return mult * 100
 
     if classe == 'B':
-        return mult*60
+        return mult * 60
 
     if classe == 'C':
-        return mult*20
+        return mult * 20
 
     raise Exception(f'Classe de produto desconhecida: {classe}')
 
@@ -112,53 +115,5 @@ def cor_estoque(classe: str, qntd: int, centro: bool = False) -> str:
     return 'red'
 
 
-def get_css():
-    return '''
-    table {
-        width: 75%;
-        border: 1px solid #AAA;
-    }
-    td {
-        border: 1px solid #CCC;
-        text-align: center;
-      
-    }
-    td > div {
-        white-space: nowrap;
-    }
-    .box {
-      display: inline-block;
-      height: 20px;
-      width: 20px;
-      border: 1px solid black;
-    }
-    
-    .red {
-      background-color: red;
-    }
-    
-    .green {
-      background-color: green;
-    }
-    
-    .yellow {
-      background-color: yellow;
-    }
-    
-    .button {
-        background-color: #4CAF50; /* Green */
-        border: none;
-        color: white;
-        padding: 15px 32px;
-        text-align: center;
-        text-decoration: none;
-        display: inline-block;
-        font-size: 16px;
-    }
-    
-    .step_button {
-        position:absolute;
-        top: 30%;
-        right: 10%;
-    }
-    '''
+def wrap_color(color: str, text: str):
+    return f'<div style="color:{color}">{text}</div>'

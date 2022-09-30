@@ -1,4 +1,4 @@
-import warnings
+from datetime import datetime
 
 import yaml
 
@@ -6,9 +6,11 @@ import util
 
 
 class Estoque:
-    def __init__(self, centro=False):
+    def __init__(self, centro=False, log=False):
         self.db = {}
         self.tipos_produtos = []
+        self.log = log
+        self.log_data = []
 
         print('Gerando estoque cheio...')
 
@@ -45,6 +47,10 @@ class Estoque:
 
         self.db[pid]['qntd'] += qntd
 
+        if self.log:
+            wrapped_text = util.wrap_color('#228B22', f'{pid}: +{qntd}')
+            self.log_data.insert(0, f'<div>[{datetime.now()}] </div>{wrapped_text}')
+
         return self.db[pid]['qntd']
 
     def debito(self, pid, qntd) -> bool:
@@ -59,5 +65,9 @@ class Estoque:
             return False
 
         self.db[pid]['qntd'] -= qntd
+
+        if self.log:
+            wrapped_text = util.wrap_color('#ff6347', f'{pid}: -{qntd}')
+            self.log_data.insert(0, f'<div>[{datetime.now()}] </div>{wrapped_text}')
 
         return self.db[pid]['qntd']

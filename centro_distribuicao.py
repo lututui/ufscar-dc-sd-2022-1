@@ -20,7 +20,7 @@ class Loja:
 
 class CentroDistribuicao:
     def __init__(self):
-        self.estoque = Estoque(centro=True)
+        self.estoque = Estoque(centro=True, log=True)
         self.fabricas: dict[str, Fabrica] = {}
         self.lojas: dict[str, Loja] = {}
 
@@ -39,9 +39,6 @@ class CentroDistribuicao:
 
         if len(lojas_conectadas) >= util.qntd_lojas:
             print('Recebido informação de todas as lojas')
-
-            self.mqtt_client.on_subscribe = None
-            self.mqtt_client.subscribe(util.web_topic)
 
             return schedule.CancelJob
 
@@ -62,7 +59,7 @@ class CentroDistribuicao:
             print('Pedindo lojas pela primeira vez')
             self.heartbeat_lojas()
 
-            schedule.every(15).seconds.do(self.heartbeat_lojas)
+            schedule.every(util.timeout_lojas).seconds.do(self.heartbeat_lojas)
             return schedule.CancelJob
 
         print('Requisitando heartbeat de fábricas')
@@ -150,7 +147,7 @@ class CentroDistribuicao:
             if util.cor_estoque(classe, qntd_atual, centro=True) != 'red':
                 continue
 
-            qntd_necessaria = util.max_estoque(classe) - qntd_atual
+            qntd_necessaria = util.max_estoque(classe, centro=True) - qntd_atual
 
             print(f'Pedindo reestoque de {pid} x {qntd_necessaria}')
 
@@ -200,10 +197,22 @@ class CentroDistribuicao:
         if payload['msg']['op'] == 'step':
             print('Recebeu mensagem de step')
             self.dia += 1
-            schedule.every(5).seconds.do(self.update_lojas)
+            schedule.every(util.timeout_lojas).seconds.do(self.update_lojas)
             return
 
-        print(f'Centro de distribuição recv unparsed msg {payload}')
+        if payload['msg']['op'] == 'log':
+            print('Recebeu mensagem de log')
+            self.mqtt_client.publish(
+                util.web_topic,
+                payload=util.build_msg(
+                    util.MsgType.WEB,
+                    util.MsgTargetType.WEB,
+                    msg_payload={'log': '<br>'.join(self.estoque.log_data)}
+                )
+            )
+            return
+
+        print(f'Centro de distribuição recv unparsed WEB msg {payload}')
 
         return
 
@@ -281,10 +290,10 @@ class CentroDistribuicao:
             raise Exception(f'Unknown topic: {msg.topic}')
 
     def on_subscribe(self, _, __, ___, ____):
-        print('Pedindo fábricas pela primeira vez')
-        self.heartbeat_fabricas()
+        schedule.every(util.timeout_fabricas).seconds.do(self.heartbeat_fabricas)
 
-        schedule.every(15).seconds.do(self.heartbeat_fabricas)
+        self.mqtt_client.on_subscribe = None
+        self.mqtt_client.subscribe(util.web_topic)
 
 
 def main():
