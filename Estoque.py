@@ -83,4 +83,4 @@ class Estoque:
             wrapped_text = util.wrap_color('#ff6347', f'{pid}: -{qntd}')
             self.log_data.insert(0, f'<div>[{datetime.now()}] </div>{wrapped_text}')
 
-        return self.db[pid]['qntd']
+        return True
