@@ -7,8 +7,14 @@ import util
 
 class Estoque:
     def __init__(self, centro=False, log=False):
+        # "Database" -> dict no formato <PID> : {"pid": <PID>, "classe": <CLASSE>, "qntd": <QUANTIDADE>}
         self.db = {}
+        
+        # Lista com todos os pids
         self.tipos_produtos = []
+        
+        # Registrar operações de crédito/débito
+        # Usado pelo visualizador
         self.log = log
         self.log_data = []
 
@@ -25,6 +31,7 @@ class Estoque:
         self.tipos_produtos = list(self.db.keys())
         print('Estoque carregado')
 
+    # Se o produto de determinado pid está abaixo de 25% (cor vermelha)
     def precisa_reestoque(self, pid) -> int:
         classe = self.db[pid]['classe']
         curr_estoque = self.db[pid]['qntd']
@@ -38,6 +45,9 @@ class Estoque:
 
         return 0
 
+    # Operação de crédito de determinada quantidade em determinado PID
+    # Retorna a nova quantidade disponível
+    # Levanta exceptions quando o PID é desconhecido ou a qntd é negativa
     def credito(self, pid, qntd) -> int:
         if pid not in self.db:
             raise Exception(f'Credito em PID ({pid}) desconhecido')
@@ -53,6 +63,9 @@ class Estoque:
 
         return self.db[pid]['qntd']
 
+    # Operação de débito em determinado PID
+    # Retorna false se não há quantidade disponível suficiente
+    # Levanta exception quanto o pid é desconhecido ou quando a quantidade é negativa
     def debito(self, pid, qntd) -> bool:
         if pid not in self.db:
             raise Exception(f'Debito em PID ({pid}: {type(pid)}) desconhecido\n{list(self.db.keys())}')
